@@ -1,9 +1,7 @@
 var express = require("express")
 var app = express()
-const http = require('http')
 const {readdir, readFile} = require('fs').promises
 
-const { ungzip } = require('node-gzip')
 var httpProxy = require('http-proxy')
 
 var apiProxy = httpProxy.createProxyServer({
@@ -19,15 +17,8 @@ var apiProxy = httpProxy.createProxyServer({
 
 apiProxy.on('error',(err)=>{console.error(err)})
 
-apiProxy.on('proxyReqWs', ()=>{
-  console.log('proxyReqWs')
-})
-
-apiProxy.on('proxyReq', ()=>{
-  console.log('proxyReq')
-})
-
 const DIR = process.env.BASTION_DIR || '/opt/connections/'
+const ROOT_URL = process.env.BASTION_ROOT_URL || 'https://bastion.gracey.dev'
 
 const getHosts = async ()=>{
   const files = await readdir(DIR)
@@ -39,21 +30,10 @@ const getHosts = async ()=>{
   return hosts.map((hostline)=>{
     const [hostname, store, ip, file] = hostline.split(',')
     return {
-      hostname,store, ip, url: `https://bastion.gracey.dev/proxy/${file}/`
+      hostname, store, ip, url: `${ROOT_URL}/proxy/${file}/`
     }
   })
 }
-
-
-// const serve = http.createServer((req, res)=>{
-//   console.log(req.path)
-//   if (req.path == '/') {
-//     getHosts().then((hosts)=>{
-//       res.send(hosts)
-//     })
-//   }
-
-// }).listen(3000)
 
 
 app.get('/',function(req, res) {
@@ -62,25 +42,14 @@ app.get('/',function(req, res) {
   })
 })
 
-
 app.all('/proxy/:host/*', (req,res)=>{
-  console.log(req.protocol, req.path)
   const httpTarget = 'http://localhost:' + req.params.host 
   apiProxy.web(req, res, {target:httpTarget, ws: true})
-
 })
 
 const server = app.listen(3000)
 
-
 server.on('upgrade', function (req, socket, head) {
-  console.log('UPGRADE REQUEST!!!!')
   const httpTarget = 'ws://localhost:' + req.url.split('/')[2]
-  console.log(httpTarget)
   apiProxy.ws(req, socket, head, {target:httpTarget, ws: true});
 })
-
-// serve.on('upgrade', function (req, socket, head) {
-//   console.log('UPGRADE REQUEST!!!!')
-//   apiProxy.ws(req, socket, head);
-// })
